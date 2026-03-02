@@ -8,12 +8,12 @@ const PORT = process.env.PORT || 3000;
 // Store last known IP
 let lastKnownIP = 'unknown';
 
-// Function to get current IP through DataImpulse
+// Function to get current IP through DataImpulse (what websites see)
 async function updateCurrentIP() {
   try {
     // Create NEW agent each time (forces new connection)
     const agent = new HttpsProxyAgent(DATAIMPULSE_PROXY);
-    const response = await fetch('https://api.ipify.org?format=json', {
+    const response = await fetch('https://httpbin.org/ip', {
       agent: agent,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -21,7 +21,8 @@ async function updateCurrentIP() {
       timeout: 10000
     });
     const data = await response.json();
-    lastKnownIP = data.ip;
+    // httpbin returns IP in "origin" field
+    lastKnownIP = data.origin || 'unknown';
     console.log(`Updated IP: ${lastKnownIP}`);
     return lastKnownIP;
   } catch (e) {
@@ -30,10 +31,38 @@ async function updateCurrentIP() {
   }
 }
 
-// Update IP every 10 seconds (faster to see rotation)
+// Update IP every 10 seconds
 setInterval(updateCurrentIP, 10000);
 // Initial check
 updateCurrentIP();
+
+// NEW ENDPOINT: Check current IP
+app.get('/check-ip', async (req, res) => {
+  try {
+    const agent = new HttpsProxyAgent(DATAIMPULSE_PROXY);
+    const response = await fetch('https://httpbin.org/ip', {
+      agent: agent,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      timeout: 10000
+    });
+    const data = await response.json();
+    const currentIP = data.origin || 'unknown';
+    
+    res.json({ 
+      currentIP: currentIP,
+      lastKnownIP: lastKnownIP,
+      note: 'This is the residential IP that websites (like apibay) see',
+      timestamp: new Date().toISOString()
+    });
+  } catch (e) {
+    res.status(500).json({ 
+      error: 'Failed to check IP', 
+      message: e.message 
+    });
+  }
+});
 
 app.get('/proxy', async (req, res) => {
   const targetUrl = req.query.url;
@@ -76,7 +105,8 @@ app.get('/proxy', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({ 
     status: 'TPB Relay is running',
-    currentIP: lastKnownIP 
+    currentIP: lastKnownIP,
+    checkEndpoint: '/check-ip'
   });
 });
 
