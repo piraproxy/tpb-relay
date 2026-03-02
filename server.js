@@ -11,6 +11,7 @@ let lastKnownIP = 'unknown';
 // Function to get current IP through DataImpulse
 async function updateCurrentIP() {
   try {
+    // Create NEW agent each time (forces new connection)
     const agent = new HttpsProxyAgent(DATAIMPULSE_PROXY);
     const response = await fetch('https://api.ipify.org?format=json', {
       agent: agent,
@@ -29,8 +30,8 @@ async function updateCurrentIP() {
   }
 }
 
-// Update IP every 20 seconds
-setInterval(updateCurrentIP, 20000);
+// Update IP every 10 seconds (faster to see rotation)
+setInterval(updateCurrentIP, 10000);
 // Initial check
 updateCurrentIP();
 
@@ -44,6 +45,7 @@ app.get('/proxy', async (req, res) => {
   console.log(`Proxying: ${targetUrl} (using IP: ${lastKnownIP})`);
   
   try {
+    // Create NEW agent for each request (forces rotation)
     const agent = new HttpsProxyAgent(DATAIMPULSE_PROXY);
     
     const response = await fetch(targetUrl, {
