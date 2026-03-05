@@ -10,7 +10,6 @@ const PORT = process.env.PORT || 3000;
 // Parse proxy URL for undici
 function createProxyAgent() {
   try {
-    const url = new URL(DATAIMPULSE_PROXY);
     return new ProxyAgent(DATAIMPULSE_PROXY);
   } catch (e) {
     console.error('Invalid proxy URL:', e.message);
@@ -18,7 +17,7 @@ function createProxyAgent() {
   }
 }
 
-// undici request with browser-like headers
+// undici request with browser headers - NO COMPRESSION
 async function fetchWithUndici(targetUrl) {
   const proxyAgent = createProxyAgent();
   if (!proxyAgent) {
@@ -32,14 +31,14 @@ async function fetchWithUndici(targetUrl) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json, text/plain, */*',
         'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
+        // KEY CHANGE: Don't accept compressed responses
+        'Accept-Encoding': 'identity', 
         'Referer': 'https://thepiratebay.org/',
         'Origin': 'https://thepiratebay.org',
         'Sec-Fetch-Dest': 'empty',
         'Sec-Fetch-Mode': 'cors',
         'Sec-Fetch-Site': 'cross-site',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
+        'Cache-Control': 'no-cache'
       },
       timeout: 30000
     });
@@ -51,11 +50,11 @@ async function fetchWithUndici(targetUrl) {
       body: data
     };
   } finally {
-    // undici handles cleanup automatically
+    // undici handles cleanup
   }
 }
 
-// Fallback to original fetch method
+// Fallback to original method
 async function fetchWithRotation(targetUrl) {
   const agent = new HttpsProxyAgent(DATAIMPULSE_PROXY);
   
@@ -85,12 +84,19 @@ app.get('/proxy', async (req, res) => {
   
   console.log(`Proxying: ${targetUrl}`);
   
-  // Try undici first with better headers
+  // Try undici first
   try {
-    console.log('🔄 Trying undici with browser headers...');
+    console.log('🔄 Trying undici (no compression)...');
     const result = await fetchWithUndici(targetUrl);
     
-    console.log(`✅ undici success: ${result.status}`);
+    // Validate it's actually JSON before sending
+    const trimmed = result.body.trim();
+    if (!(trimmed.startsWith('[') || trimmed.startsWith('{'))) {
+      console.log(`⚠️ Response not JSON: ${trimmed.substring(0, 100)}`);
+      throw new Error('Non-JSON response from undici');
+    }
+    
+    console.log(`✅ undici success: ${result.status} (JSON valid)`);
     
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -102,7 +108,7 @@ app.get('/proxy', async (req, res) => {
     console.log('⚠️ Falling back to standard fetch...');
   }
   
-  // Fallback to original method
+  // Fallback
   try {
     const response = await fetchWithRotation(targetUrl);
     const text = await response.text();
@@ -124,11 +130,11 @@ app.get('/proxy', async (req, res) => {
 
 app.get('/', (req, res) => {
   res.json({ 
-    status: 'TPB Relay with undici',
+    status: 'TPB Relay with undici (no compression)',
     proxy: DATAIMPULSE_PROXY ? 'Configured' : 'NOT SET'
   });
 });
 
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT} (undici enabled)`);
+  console.log(`Server listening on port ${PORT}`);
 });
