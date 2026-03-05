@@ -8,6 +8,6 @@
   "dependencies": {
     "express": "^4.18.2",
     "https-proxy-agent": "^7.0.2",
-    "tls-client": "^1.7.0"
+    "tlsclientwrapper": "^1.0.0"
   }
 }
